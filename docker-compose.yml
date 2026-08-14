@@ -1,0 +1,66 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: datingapp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: datingapp
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: datingapp-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend/DatingApp.Api
+    container_name: datingapp-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Postgres: "Host=postgres;Port=5432;Database=datingapp;Username=postgres;Password=postgres"
+      ConnectionStrings__Redis: "redis:6379"
+      Jwt__Key: "CHANGE_THIS_TO_A_LONG_RANDOM_SECRET_AT_LEAST_32_CHARS"
+      Cors__AllowedOrigins__0: "http://localhost:3000"
+      ASPNETCORE_ENVIRONMENT: "Development"
+    ports:
+      - "5000:8080"
+
+  web:
+    build:
+      context: ./frontend
+    container_name: datingapp-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      NEXT_PUBLIC_API_URL: "http://localhost:5000/api"
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres-data:
